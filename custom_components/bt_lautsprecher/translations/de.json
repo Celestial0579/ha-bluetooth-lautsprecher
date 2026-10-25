@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bluetooth-Adapter wählen",
+        "description": "Über diesen Adapter koppelt Home Assistant Bluetooth-Lautsprecher und gibt Ton aus. Ton und „Wach halten“ funktionieren nur unter Home Assistant OS oder Supervised.",
+        "data": {
+          "adapter": "Adapter"
+        }
+      }
+    },
+    "abort": {
+      "no_adapter": "Kein Bluetooth-Adapter gefunden. Ist der Adapter angeschlossen bzw. an die VM durchgereicht?",
+      "already_configured": "Dieser Adapter ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bluetooth-Lautsprecher",
+        "data": {
+          "auto_reconnect": "Automatisch wieder verbinden (nur Lautsprecher mit „Wach halten“)",
+          "default_output": "Verbundenen Lautsprecher als Tonausgabe von Home Assistant festlegen",
+          "keepalive_noise": "Mit sehr leisem Rauschen statt Stille wach halten (falls der Lautsprecher trotz Stille abschaltet)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "suchen": {
+        "name": "Suchen"
+      },
+      "koppeln": {
+        "name": "Koppeln und verbinden"
+      },
+      "vergessen": {
+        "name": "Vergessen"
+      }
+    },
+    "select": {
+      "neues_geraet": {
+        "name": "Neues Gerät"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Letzte Aktion"
+      },
+      "verbunden": {
+        "name": "Verbundene Lautsprecher"
+      }
+    },
+    "switch": {
+      "verbunden": {
+        "name": "Verbunden"
+      },
+      "wach_halten": {
+        "name": "Wach halten"
+      }
+    }
+  }
+}

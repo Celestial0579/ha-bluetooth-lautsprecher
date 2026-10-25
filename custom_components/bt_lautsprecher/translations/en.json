@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose Bluetooth adapter",
+        "description": "Home Assistant pairs Bluetooth speakers and plays audio through this adapter. Audio and keep-awake only work on Home Assistant OS or Supervised.",
+        "data": {
+          "adapter": "Adapter"
+        }
+      }
+    },
+    "abort": {
+      "no_adapter": "No Bluetooth adapter found. Is it plugged in or passed through to the VM?",
+      "already_configured": "This adapter is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bluetooth speakers",
+        "data": {
+          "auto_reconnect": "Reconnect automatically (only speakers with keep-awake on)",
+          "default_output": "Make a connected speaker the Home Assistant audio output",
+          "keepalive_noise": "Keep awake with very faint noise instead of silence (if the speaker turns off despite silence)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "suchen": {
+        "name": "Search"
+      },
+      "koppeln": {
+        "name": "Pair and connect"
+      },
+      "vergessen": {
+        "name": "Forget"
+      }
+    },
+    "select": {
+      "neues_geraet": {
+        "name": "New device"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Last action"
+      },
+      "verbunden": {
+        "name": "Connected speakers"
+      }
+    },
+    "switch": {
+      "verbunden": {
+        "name": "Connected"
+      },
+      "wach_halten": {
+        "name": "Keep awake"
+      }
+    }
+  }
+}
