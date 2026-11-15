@@ -159,6 +159,8 @@ class BluezVerwalter:
         # Eindeutiger Busname von org.bluez. Nur von dort werden Signale angenommen: Auf dem
         # System-Bus darf jeder Teilnehmer Signale an diese Verbindung schicken.
         self.bluez_name: str | None = None
+        self._agent_exportiert = False
+        self._neuanmeldung: asyncio.Task | None = None
 
     # ------------------------------------------------------------ Lebenszyklus
     async def start(self) -> None:
@@ -196,8 +198,12 @@ class BluezVerwalter:
             await self._aufruf("/org/bluez", IFACE_AGENT_MANAGER, "UnregisterAgent", "o", [AGENT_PATH])
         except BluetoothError:
             pass
+        if self._neuanmeldung is not None:
+            self._neuanmeldung.cancel()
+            self._neuanmeldung = None
         self._bus.disconnect()
         self._bus = None
+        self._agent_exportiert = False
 
     def zuhoerer_hinzufuegen(self, rueckruf: Callable[[], None]) -> Callable[[], None]:
         self._zuhoerer.append(rueckruf)
@@ -290,7 +296,9 @@ class BluezVerwalter:
 
     async def _agent_anmelden(self) -> None:
         assert self._bus is not None
-        self._bus.export(AGENT_PATH, _Agent(self))
+        if not self._agent_exportiert:  # einmal je Verbindung; nach einem BlueZ-Neustart nur neu anmelden
+            self._bus.export(AGENT_PATH, _Agent(self))
+            self._agent_exportiert = True
         try:
             await self._aufruf("/org/bluez", IFACE_AGENT_MANAGER, "RegisterAgent", "os", [AGENT_PATH, "NoInputNoOutput"])
         except BluetoothError as err:
@@ -307,7 +315,7 @@ class BluezVerwalter:
             return None
         if (nachricht.sender, nachricht.interface, nachricht.member) == (DBUS, DBUS, "NameOwnerChanged"):
             if nachricht.signature == "sss" and nachricht.body[0] == BLUEZ:
-                self.bluez_name = nachricht.body[2] or None
+                self._eigentuemer_gewechselt(nachricht.body[2] or None)
             return None
         # Nur Signale des aktuellen Eigentümers von org.bluez, mit erwarteter Schnittstelle und Signatur.
         if self.bluez_name is None or nachricht.sender != self.bluez_name:
@@ -332,6 +340,33 @@ class BluezVerwalter:
         if geaendert:
             self._melden()
         return None
+
+    def _eigentuemer_gewechselt(self, neu: str | None) -> None:
+        """bluetoothd beendet oder neu gestartet: Es kennt den Agenten nicht mehr, und für die
+        Geräte des alten Prozesses kommt kein InterfacesRemoved."""
+        alt, self.bluez_name = self.bluez_name, neu
+        if neu == alt:
+            return
+        if self.geraete:
+            self.geraete = {}
+            self._melden()
+        if neu is None or self._bus is None:
+            return
+        if self._neuanmeldung is not None:
+            self._neuanmeldung.cancel()
+        self._neuanmeldung = asyncio.get_running_loop().create_task(self._neu_anmelden())
+
+    async def _neu_anmelden(self) -> None:
+        try:
+            await self._laden()
+            await self._agent_anmelden()
+        except BluetoothError as err:
+            _LOGGER.warning("Nach dem Neustart von BlueZ nicht neu angemeldet: %s", err)
+            return
+        finally:
+            self._neuanmeldung = None
+        _LOGGER.info("BlueZ neu gestartet: Geräteliste und Kopplungsagent neu angemeldet")
+        self._melden()
 
     def _melden(self) -> None:
         for rueckruf in list(self._zuhoerer):
