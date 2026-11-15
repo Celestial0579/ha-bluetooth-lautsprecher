@@ -12,6 +12,11 @@ from .const import DOMAIN
 from .steuerung import Steuerung
 
 
+def geraete_kennung(adapter: str, adresse: str, schluessel: str) -> str:
+    """Kennung einer Entität eines Lautsprechers: <Adapter>_<Lautsprecher>_<Schlüssel>."""
+    return f"{adapter}_{adresse}_{schluessel}"
+
+
 class _Basis(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -50,7 +55,8 @@ class GeraeteEntitaet(_Basis):
     def __init__(self, steuerung: Steuerung, adresse: str, schluessel: str) -> None:
         super().__init__(steuerung, schluessel)
         self._adresse = adresse
-        self._attr_unique_id = f"{adresse}_{schluessel}"
+        # Mit dem Adapter: derselbe Lautsprecher kann an zwei Adaptern gekoppelt sein.
+        self._attr_unique_id = geraete_kennung(str(steuerung.entry.unique_id), adresse, schluessel)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, adresse)},
             connections={(dr.CONNECTION_BLUETOOTH, adresse)},

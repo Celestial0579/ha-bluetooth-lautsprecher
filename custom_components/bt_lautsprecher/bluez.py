@@ -54,13 +54,18 @@ def geraetename(geraet: dict[str, Any]) -> str:
     return str(geraet.get("Alias") or geraet.get("Name") or geraet.get("Address", "?"))
 
 
+ADAPTER_ZEIT = 10  # Sekunden für Verbindung und Abfrage im Einrichtungsdialog
+
+
 async def adapter_liste() -> dict[str, dict[str, str]]:
     """Alle Bluetooth-Adapter als {Objektpfad: {"name": ..., "adresse": ...}}."""
-    bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+    async with asyncio.timeout(ADAPTER_ZEIT):
+        bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
     try:
-        antwort = await bus.call(
-            Message(destination=BLUEZ, path="/", interface=IFACE_OM, member="GetManagedObjects")
-        )
+        async with asyncio.timeout(ADAPTER_ZEIT):
+            antwort = await bus.call(
+                Message(destination=BLUEZ, path="/", interface=IFACE_OM, member="GetManagedObjects")
+            )
         if antwort.message_type == MessageType.ERROR:
             return {}
         ergebnis = {}
@@ -74,7 +79,15 @@ async def adapter_liste() -> dict[str, dict[str, str]]:
 
 
 class _Agent(ServiceInterface):
-    """Kopplungsagent: nimmt nur angeforderte oder vertrauenswürdige Geräte an."""
+    """Kopplungsagent: nimmt nur die Kopplung an, die gerade über die Oberfläche läuft.
+
+    Schutzmodell: Der Agent ist Standard-Agent des Systems und antwortet ohne Zutun eines
+    Menschen (feste PIN, stille Bestätigung). Er darf deshalb nur für das eine Gerät
+    zustimmen, das der Nutzer eben mit „Koppeln und verbinden“ ausgewählt hat. Eine
+    Bluetooth-Adresse lässt sich fälschen; „schon vertrauenswürdig“ ist darum kein Grund,
+    eine NEUE Kopplung anzunehmen. Gewöhnliche Verbindungen vertrauenswürdiger Geräte
+    erreichen den Agenten gar nicht, BlueZ erlaubt sie selbst.
+    """
 
     def __init__(self, verwalter: "BluezVerwalter") -> None:
         super().__init__("org.bluez.Agent1")
@@ -221,7 +234,8 @@ class BluezVerwalter:
         await self._aufruf(self.adapter_pfad, IFACE_ADAPTER, "RemoveDevice", "o", [pfad], zeit=20)
 
     def darf_koppeln(self, pfad: str) -> bool:
-        return pfad == self._kopplungsziel or bool(self.geraete.get(pfad, {}).get("Trusted"))
+        """Nur das Gerät, dessen Kopplung gerade über die Oberfläche läuft."""
+        return self._kopplungsziel is not None and pfad == self._kopplungsziel
 
     # ------------------------------------------------------------ intern
     async def _suche_stoppen(self) -> None:
