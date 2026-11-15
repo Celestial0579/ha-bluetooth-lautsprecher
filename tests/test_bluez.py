@@ -63,12 +63,40 @@ def test_agent_nimmt_nur_das_angeforderte_geraet() -> None:
         agent._pruefen(FREMD)
 
 
-def _signal(member: str, body: list, path: str = "/") -> SimpleNamespace:
-    return SimpleNamespace(message_type=MessageType.SIGNAL, member=member, body=body, path=path)
+SIGNATUR = {"InterfacesAdded": ("oa{sa{sv}}", bluez.IFACE_OM), "InterfacesRemoved": ("oas", bluez.IFACE_OM),
+            "PropertiesChanged": ("sa{sv}as", bluez.IFACE_PROPS)}
+
+
+def _signal(member: str, body: list, path: str = "/", sender: str = ":1.5", signatur: str | None = None) -> SimpleNamespace:
+    sig, iface = SIGNATUR[member]
+    return SimpleNamespace(message_type=MessageType.SIGNAL, member=member, body=body, path=path,
+                           sender=sender, interface=iface, signature=signatur or sig)
+
+
+def test_signale_nur_vom_eigentuemer_von_bluez() -> None:
+    verwalter = BluezVerwalter(ADAPTER)
+    verwalter.bluez_name = ":1.5"
+    hinzu = [BOX, {IFACE_DEVICE: {"Address": Variant("s", "AA")}}]
+    verwalter._nachricht(_signal("InterfacesAdded", hinzu, sender=":1.99"))  # fremder Teilnehmer
+    verwalter._nachricht(_signal("InterfacesAdded", hinzu, signatur="s"))  # falsche Signatur
+    assert verwalter.geraete == {}
+    # BlueZ startet neu und bekommt einen neuen Namen.
+    verwalter._nachricht(SimpleNamespace(message_type=MessageType.SIGNAL, sender=bluez.DBUS, interface=bluez.DBUS,
+                                         member="NameOwnerChanged", signature="sss", body=["org.bluez", ":1.5", ":1.7"], path="/"))
+    assert verwalter.bluez_name == ":1.7"
+    verwalter._nachricht(_signal("InterfacesAdded", hinzu, sender=":1.5"))
+    assert verwalter.geraete == {}
+    verwalter._nachricht(_signal("InterfacesAdded", hinzu, sender=":1.7"))
+    assert BOX in verwalter.geraete
+    # Ein fremder Teilnehmer kann NameOwnerChanged nicht vortäuschen.
+    verwalter._nachricht(SimpleNamespace(message_type=MessageType.SIGNAL, sender=":1.99", interface=bluez.DBUS,
+                                         member="NameOwnerChanged", signature="sss", body=["org.bluez", "", ":1.99"], path="/"))
+    assert verwalter.bluez_name == ":1.7"
 
 
 def test_geraeteliste_aus_signalen() -> None:
     verwalter = BluezVerwalter(ADAPTER)
+    verwalter.bluez_name = ":1.5"
     meldungen: list[int] = []
     verwalter.zuhoerer_hinzufuegen(lambda: meldungen.append(1))
 
