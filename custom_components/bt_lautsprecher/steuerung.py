@@ -268,7 +268,7 @@ class Steuerung:
         self._einstellungen.pop(adresse, None)
         self._speichern()
         registry = dr.async_get(self.hass)
-        if (geraet := registry.async_get_device(identifiers={(DOMAIN, adresse)})) is not None:
+        if (geraet := registry.async_get_device_by_identifier((DOMAIN, adresse), self.entry.entry_id)) is not None:
             registry.async_remove_device(geraet.id)
 
     def _veraltete_geraete_entfernen(self) -> None:

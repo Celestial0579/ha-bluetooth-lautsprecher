@@ -6,9 +6,10 @@ import asyncio
 import logging
 import os
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
+ZEIT = ClientTimeout(total=10)
 
 
 def supervisor_vorhanden() -> bool:
@@ -25,7 +26,7 @@ async def standard_ausgabe_setzen(sitzung: ClientSession, adresse: str, versuche
     marke = adresse.replace(":", "_").upper()
     for _ in range(versuche):
         try:
-            async with sitzung.get(f"{basis}/audio/info", headers=kopf) as antwort:
+            async with sitzung.get(f"{basis}/audio/info", headers=kopf, timeout=ZEIT) as antwort:
                 daten = await antwort.json()
             ausgaenge = (daten.get("data") or {}).get("audio", {}).get("output", [])
             treffer = next((a for a in ausgaenge if marke in str(a.get("name", "")).upper()), None)
@@ -33,7 +34,7 @@ async def standard_ausgabe_setzen(sitzung: ClientSession, adresse: str, versuche
                 if treffer.get("default"):
                     return True
                 async with sitzung.post(
-                    f"{basis}/audio/default/output", headers=kopf, json={"name": treffer["name"]}
+                    f"{basis}/audio/default/output", headers=kopf, json={"name": treffer["name"]}, timeout=ZEIT
                 ) as antwort:
                     return antwort.status == 200
         except (ClientError, TimeoutError, ValueError) as err:

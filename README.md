@@ -57,8 +57,9 @@ abschalten).
 
 - **Wach halten** sendet Stille per ffmpeg an die Bluetooth-Ausgabe. Akku-Lautsprecher schalten dann nicht
   mehr von selbst ab und entladen sich entsprechend.
-- Der Kopplungsagent nimmt nur Kopplungen an, die über die Oberfläche angestoßen wurden, oder von bereits
-  vertrauenswürdigen Geräten; fremde Kopplungsversuche werden abgewiesen.
+- Der Kopplungsagent nimmt nur die Kopplung an, die gerade über die Oberfläche angestoßen wurde; alle
+  anderen Kopplungsversuche werden abgewiesen, auch von bereits gekoppelten Adressen (eine Adresse lässt sich
+  fälschen). Wer einen Lautsprecher nach dem Zurücksetzen neu koppeln will, vergisst ihn hier und koppelt ihn neu.
 - Bluetooth hat rund 0,2 Sekunden Verzögerung; gemeinsam mit anderen Lautsprechern läuft es nicht ganz synchron.
 
 ---

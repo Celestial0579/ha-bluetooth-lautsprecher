@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .bluez import BluetoothError
 from .const import DOMAIN
@@ -25,9 +25,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: BtLautsprecherConfigEntr
         await steuerung.async_stop()
         raise ConfigEntryNotReady(str(err)) from err
     entry.runtime_data = steuerung
+    await er.async_migrate_entries(hass, entry.entry_id, lambda e: _neue_kennung(entry, e))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_optionen_geaendert))
     return True
+
+
+def _neue_kennung(entry: BtLautsprecherConfigEntry, eintrag: er.RegistryEntry) -> dict[str, str] | None:
+    """Bis 0.1.0 fehlte der Adapter in der Kennung der Lautsprecher-Entitäten (<Lautsprecher>_<Schlüssel>)."""
+    adapter = str(entry.unique_id)
+    if eintrag.unique_id.startswith(f"{adapter}_"):
+        return None  # Entität des Adapters oder schon neu
+    return {"new_unique_id": f"{adapter}_{eintrag.unique_id}"}
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BtLautsprecherConfigEntry) -> bool:
