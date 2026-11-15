@@ -94,6 +94,54 @@ def test_signale_nur_vom_eigentuemer_von_bluez() -> None:
     assert verwalter.bluez_name == ":1.7"
 
 
+def _eigentuemer(alt: str, neu: str) -> SimpleNamespace:
+    return SimpleNamespace(message_type=MessageType.SIGNAL, sender=bluez.DBUS, interface=bluez.DBUS,
+                           member="NameOwnerChanged", signature="sss", body=["org.bluez", alt, neu], path="/")
+
+
+async def test_neustart_von_bluez_meldet_agent_und_liste_neu() -> None:
+    """#8: Nach einem Neustart kennt bluetoothd den Agenten nicht mehr."""
+    verwalter = BluezVerwalter(ADAPTER)
+    verwalter.bluez_name = ":1.5"
+    verwalter.geraete = {BOX: {"Address": "AA"}}
+    exportiert: list[str] = []
+    verwalter._bus = SimpleNamespace(export=lambda pfad, _obj: exportiert.append(pfad))
+    verwalter._agent_exportiert = True  # beim Start schon exportiert
+    aufrufe: list[tuple[str, str]] = []
+
+    async def aufruf(pfad, schnittstelle, mitglied, *_args, **_kw):
+        aufrufe.append((schnittstelle, mitglied))
+        if mitglied == "GetManagedObjects":
+            return [{BOX: {IFACE_DEVICE: {"Address": Variant("s", "AA")}}, FREMD: {IFACE_DEVICE: {}}}]
+        return []
+
+    verwalter._aufruf = aufruf
+    meldungen: list[int] = []
+    verwalter.zuhoerer_hinzufuegen(lambda: meldungen.append(1))
+
+    verwalter._nachricht(_eigentuemer(":1.5", ""))  # bluetoothd beendet
+    assert verwalter.bluez_name is None and verwalter.geraete == {}
+    assert verwalter._neuanmeldung is None
+    verwalter._nachricht(_eigentuemer("", ":1.9"))  # wieder da
+    assert verwalter._neuanmeldung is not None
+    await verwalter._neuanmeldung
+    assert verwalter.bluez_name == ":1.9"
+    assert set(verwalter.geraete) == {BOX, FREMD}
+    assert (bluez.IFACE_AGENT_MANAGER, "RegisterAgent") in aufrufe
+    assert (bluez.IFACE_AGENT_MANAGER, "RequestDefaultAgent") in aufrufe
+    assert exportiert == []  # nicht doppelt exportiert
+    assert len(meldungen) == 2  # Liste geleert, Liste neu
+
+
+async def test_gleicher_eigentuemer_aendert_nichts() -> None:
+    verwalter = BluezVerwalter(ADAPTER)
+    verwalter.bluez_name = ":1.5"
+    verwalter.geraete = {BOX: {}}
+    verwalter._bus = SimpleNamespace()
+    verwalter._nachricht(_eigentuemer("", ":1.5"))
+    assert verwalter.geraete == {BOX: {}} and verwalter._neuanmeldung is None
+
+
 def test_geraeteliste_aus_signalen() -> None:
     verwalter = BluezVerwalter(ADAPTER)
     verwalter.bluez_name = ":1.5"
