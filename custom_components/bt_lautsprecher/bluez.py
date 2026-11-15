@@ -24,6 +24,14 @@ IFACE_AGENT_MANAGER = "org.bluez.AgentManager1"
 IFACE_PROPS = "org.freedesktop.DBus.Properties"
 IFACE_OM = "org.freedesktop.DBus.ObjectManager"
 AGENT_PATH = "/io/github/celestial0579/bt_lautsprecher/agent"
+DBUS = "org.freedesktop.DBus"
+
+# Signale, die angenommen werden: (Schnittstelle, Name) -> Signatur
+SIGNALE = {
+    (IFACE_OM, "InterfacesAdded"): "oa{sa{sv}}",
+    (IFACE_OM, "InterfacesRemoved"): "oas",
+    (IFACE_PROPS, "PropertiesChanged"): "sa{sv}as",
+}
 
 
 class BluetoothError(Exception):
@@ -148,6 +156,9 @@ class BluezVerwalter:
         self._zuhoerer: list[Callable[[], None]] = []
         self._kopplungsziel: str | None = None
         self._praefix = adapter_pfad + "/dev_"
+        # Eindeutiger Busname von org.bluez. Nur von dort werden Signale angenommen: Auf dem
+        # System-Bus darf jeder Teilnehmer Signale an diese Verbindung schicken.
+        self.bluez_name: str | None = None
 
     # ------------------------------------------------------------ Lebenszyklus
     async def start(self) -> None:
@@ -159,6 +170,7 @@ class BluezVerwalter:
         for regel in (
             f"type='signal',sender='{BLUEZ}',interface='{IFACE_OM}'",
             f"type='signal',sender='{BLUEZ}',interface='{IFACE_PROPS}',member='PropertiesChanged'",
+            f"type='signal',sender='{DBUS}',interface='{DBUS}',member='NameOwnerChanged',arg0='{BLUEZ}'",
         ):
             await self._bus.call(
                 Message(
@@ -170,6 +182,10 @@ class BluezVerwalter:
                     body=[regel],
                 )
             )
+        try:
+            self.bluez_name = (await self._aufruf("/org/freedesktop/DBus", DBUS, "GetNameOwner", "s", [BLUEZ], ziel=DBUS))[0]
+        except BluetoothError as err:
+            raise BluetoothError(f"BlueZ läuft nicht: {err}") from err
         await self._laden()
         await self._agent_anmelden()
 
@@ -246,12 +262,12 @@ class BluezVerwalter:
 
     async def _aufruf(
         self, pfad: str, schnittstelle: str, name: str, signatur: str = "",
-        inhalt: list[Any] | None = None, zeit: float = 10,
+        inhalt: list[Any] | None = None, zeit: float = 10, ziel: str = BLUEZ,
     ) -> list[Any]:
         if self._bus is None:
             raise BluetoothError("Nicht mit D-Bus verbunden")
         nachricht = Message(
-            destination=BLUEZ, path=pfad, interface=schnittstelle, member=name,
+            destination=ziel, path=pfad, interface=schnittstelle, member=name,
             signature=signatur, body=inhalt or [],
         )
         try:
@@ -288,6 +304,15 @@ class BluezVerwalter:
 
     def _nachricht(self, nachricht: Message) -> None:
         if nachricht.message_type != MessageType.SIGNAL:
+            return None
+        if (nachricht.sender, nachricht.interface, nachricht.member) == (DBUS, DBUS, "NameOwnerChanged"):
+            if nachricht.signature == "sss" and nachricht.body[0] == BLUEZ:
+                self.bluez_name = nachricht.body[2] or None
+            return None
+        # Nur Signale des aktuellen Eigentümers von org.bluez, mit erwarteter Schnittstelle und Signatur.
+        if self.bluez_name is None or nachricht.sender != self.bluez_name:
+            return None
+        if SIGNALE.get((nachricht.interface, nachricht.member)) != nachricht.signature:
             return None
         geaendert = False
         if nachricht.member == "InterfacesAdded":
