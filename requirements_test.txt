@@ -1,1 +1,3 @@
-pytest-homeassistant-custom-component
+# Feste Fassung, damit jeder CI-Lauf dieselbe nutzt. Sie legt auch die Home-Assistant-Fassung der
+# Tests fest, die nicht älter sein darf als die Mindestfassung in hacs.json. Dependabot hebt sie an.
+pytest-homeassistant-custom-component==0.13.375
